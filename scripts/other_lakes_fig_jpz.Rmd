@@ -1,0 +1,26 @@
+---
+title: "other-lakes-phenology"
+author: "Justin Pomeranz"
+date: "8/7/2023"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Ice phenology for non-YSL lakes
+
+```{r}
+# libraries
+library(tidyverse)
+```
+
+
+
+```{r, message=FALSE}
+ysl <- read_csv("scripts/YSLoff.csv")
+non_ysl <- read_csv("scripts/other_phenology_data.csv")
+```
+
+
