@@ -40,7 +40,7 @@ Read in data:
 **NOTE - If running this script on a different computer, you'll need to update the filepath below**
 
 ```{r}
-ysl_ice <- read.csv("scripts/YSLoff.csv")%>% #UPDATE FILEPATH HERE
+ysl_ice <- read.csv(here::here("scripts/YSLoff.csv"))%>% #UPDATE FILEPATH HERE
   select(Year:SnowDepth)%>%
   select(-IceOnDate, -IceOffDate) #select desired columns
 ```
