@@ -14,6 +14,16 @@ knitr::opts_chunk$set(echo = TRUE)
 
 ## Ice phenology for non-YSL lakes
 
+### Overview  
+
+* This script analyzes ice phenology data for lakes other than Yellowstone.  
+
+* It runs some simple, prelimanry OLS regressions  
+
+* At the bottom, it adds the Yellowstone data to the figures for comparison across lakes.  
+
+  * This can be considered a first draft for the "new" figure 2 from the manuscript, comparing ice on, off, and duration dates for all 8 lakes. 
+
 #### Figures
 
 I removed legends from figures and increased default size for visualization. 
@@ -28,7 +38,7 @@ library(broom)
 
 ### Read in data 
 
-Note that in this rmarkdown script, the `here::here(...)` code is necessary for markdown to "find" my data file inside of the `scripts/` folder. 
+Note that in this rmarkdown script, the `here::here(...)` code is necessary for markdown to "find" the `other_phenology.txt` file inside of the `scripts/` folder. 
 
 ```{r, message=FALSE}
 non_ysl <- read_csv(here::here("scripts/other_phenology.txt"))
@@ -61,24 +71,62 @@ hydro.day = function(x, start.month = 10L) {
 
 #### Make the data for the figures
 
+* Select the columns  
+* filter out appropriate lakes  
+  * Get criteria from Scott  
 ```{r}
 fig_dat <- non_ysl %>%
   # select necessary columns
-  select(lake, start_year, iceOn, iceOff, orig_duration) %>% 
-  # remove rows with NA values
-  # this may need to be modified, there could be ice on/off dates that could be included for more robust analysis
-  na.omit() %>%
+  select(lake, lakecode, start_year, iceOn, iceOff, orig_duration) %>% 
+  # filter out lakes: 
+  filter(lakecode == "JK25"| # Lake Haukivesi
+           lakecode == "JK02"| # Lake Kallavesi
+           lakecode == "GW369"| # Lake Kallsjön
+           lakecode == "JK03"| # Näsijärvi
+           lakecode == "JK05"| # Päijänne
+           lakecode == "JK40"| # Pielinen
+           lakecode == "GW484" # Skoruman
+         ) 
+```
+
+Now, we need to modify the data slightly.  
+
+* calculate "hydro day" (Julian day of water year, starting on Oct 1)  
+
+* filter years between 1927 to 2022  
+
+* Calculate ice duration days  
+
+  * Note: Original "phenology" data set did include a column `orig_duration` which has the number of days in it  
+  
+  * Not all observations (year-lake combinations) had this calculated  
+  
+  * `ice_days` is a new column with the number of days the ice was there  
+  
+  * `dur_eq` is a logical column to show whether or not new calculation matches original 
+  
+
+```{r}
+fig_dat <- fig_dat %>%
   # caluclate on and off julian dates for water year
   mutate(j_on_wy = hydro.day(iceOn),
          j_off_wy = hydro.day(iceOff)) %>%
-  # filter out data only from 1900
-  # this is arbitrary and could be modified
-  # just did this here to make it easier to work out data
-  filter(start_year > 1900) #~ 26 lakes
+  # filter out data only from 1927 to 2022
+  filter(start_year >= 1927, start_year <=2022) %>%
+  mutate(ice_days = j_off_wy - j_on_wy,
+         dur_eq = ice_days == orig_duration)
+head(fig_dat)
+```
+
+Do any of the calculations result in different number of ice duration days?
+```{r}
+fig_dat %>%
+  select(ice_days, orig_duration, dur_eq) %>%
+  filter(dur_eq == FALSE)
 ```
 
 
-### Figure 2a
+### Figure 2a: ice-on date
 
 Plot the data to match panel a from figure 2. 
 
@@ -97,24 +145,10 @@ fig_dat %>%
   theme(legend.position = "none")
 ```
 
-Select lakes that have > 50 years of data. This is arbitrary and just for visualization. 
+Appears that ice on day is flat to possibly occurring later in the year. Although the "U" shape of many of them is interesting. Indicates that ice-on used to be later in the year, and then got earlier in the mid-century, only to get later again in the more recent decades.  
 
-```{r, message=FALSE}
-fig_dat %>%
-  group_by(lake) %>%
-  mutate(count = n()) %>%
-  filter(count >50) %>%
-  ggplot(aes(x = start_year,
-             y = j_on_wy,
-             color = lake)) +
-  geom_point() +
-  stat_smooth(method = "lm") +
-  facet_wrap(~lake) +
-  theme_bw() +
-  labs(x = "water year",
-       y = "ice on Julian date") +
-  theme(legend.position = "none")
-```
+
+#### "Global" ice-on relationship  
 
 This is probably not a valid analysis, but including because I'm curious
 
@@ -133,10 +167,10 @@ fig_dat %>%
   theme(legend.position = "none")
 
 ```
-Does look like there's quite the uptick in the last 20 years or so! In other words, ice off is later in the year. 
 
+Maybe some variation across tie, but the "U" shape is not encouraging. 
 
-### Figure 2b
+### Figure 2b: ice-off
 
 Plot the data to match panel b from figure 2: ice off dates
 
@@ -155,26 +189,11 @@ fig_dat %>%
   theme(legend.position = "none")
 ```
 
-Select lakes that have > 50 years of data. This is arbitrary and just for visualization. 
+Possibly a bit more of a consistent result for early ice-off dates.  
 
-```{r, message=FALSE}
-fig_dat %>%
-  group_by(lake) %>%
-  mutate(count = n()) %>%
-  filter(count >50) %>%
-  ggplot(aes(x = start_year,
-             y = j_off_wy,
-             color = lake)) +
-  geom_point() +
-  stat_smooth(method = "lm") +
-  facet_wrap(~lake) +
-  theme_bw() +
-  labs(x = "water year",
-       y = "ice off Julian date") +
-  theme(legend.position = "none")
-```
+#### "Global" ice-off
 
-This is probably not a valid analysis, but including becasue I'm curious
+Again, probably not a valid analysis, but including for visualization. 
 
 ```{r, message=FALSE}
 fig_dat %>%
@@ -191,18 +210,18 @@ fig_dat %>%
   theme(legend.position = "none")
 
 ```
-Again, quite the change (earlier ice-off)in the last 20 years or so!
+This "global" relationship is more stark. Quite the change (earlier ice-off) in the last ~50 years or so!
 
 
-### Figure 2c
+### Figure 2c: duration
 
-Plot the data to match panel b from figure 2: ice off dates
+Plot the data to match panel c from figure 2: ice duration days
 
 ```{r, message = FALSE}
 # figure a ice off j_data
 fig_dat %>%
   ggplot(aes(x = start_year,
-             y = orig_duration,
+             y = ice_days,
              color = lake)) +
   geom_point() +
   stat_smooth() +
@@ -213,31 +232,15 @@ fig_dat %>%
   theme(legend.position = "none")
 ```
 
-Select lakes that have > 50 years of data. This is arbitrary and just for visualization. 
+Total ice duration appears to be flat or slightly decreasing.  
 
-```{r, message=FALSE}
-fig_dat %>%
-  group_by(lake) %>%
-  mutate(count = n()) %>%
-  filter(count >50) %>%
-  ggplot(aes(x = start_year,
-             y = orig_duration,
-             color = lake)) +
-  geom_point() +
-  stat_smooth(method = "lm") +
-  facet_wrap(~lake) +
-  theme_bw() +
-  labs(x = "water year",
-       y = "ice duration; days") +
-  theme(legend.position = "none")
-```
+#### Global duration 
 
-This is probably not a valid analysis, but including becasue I'm curious
 
 ```{r, message=FALSE}
 fig_dat %>%
   ggplot(aes(x = start_year,
-             y = orig_duration,
+             y = ice_days,
              color = lake)) +
   geom_point() +
   stat_smooth(inherit.aes = FALSE,
@@ -249,14 +252,37 @@ fig_dat %>%
   theme(legend.position = "none")
 
 ```
-Again, quite the change (shorter duration)in the last 20 years or so!
+Appears to be declining. Not sure why the geom_smooth line stops early. I thought it was due to a lack of data at some sites (lake == storuman), but when I filtered it out and plotted again the line still stopped short. 
+
+* Missing observations in later years?
+
+```{r}
+# missing data in later years
+fig_dat %>%
+  group_by(start_year) %>%
+  count() %>%
+  ggplot(aes(x = start_year, 
+             y = n)) +
+  geom_point()
+```
+
+Appears that there is a lack of data in some of the more recent years. As I said before, the "global"-level analysis is probably confounded anyways. Fitting individual regressesions below to explore relationships within each lake. 
 
 
 ## Basic linear models, just for "fun"
 
-The following code fits a basic linear model looking at response variable (ice on, off, duration) by year (centered). Models are sit independently for each lake. Results are filtered to only show significant results for the $\beta_1$ (i.e., slope) coefficient. 
+The following code:  
+* fits a basic linear model looking at response variable (ice on, off, duration) by year (centered).  
+
+* Models are fit independently for each lake.   
+
+* Results are filtered to only show significant results for the $\beta_1$ (i.e., slope) coefficient. 
 
 Not sure if we want to actually analyze this data. I don't think this is the *best* analysis for this, but just putting on here as an example. 
+
+On second thoughts, if we want to do something like this, a GAM or similar is probably the best. Based on the plots above, it does seem that there might be a drop off or threshold response, and simple Ordinary Least Squares (linear) relationships are probably not the best for that. 
+
+I haven't fit GAMs in a while so would need to look into that more. But could be done if we think it's worth exploring. 
 
 #### Ice on
 
@@ -280,14 +306,14 @@ fig_dat %>%
   select(lake, estimate, p.value, beta1_positive)
 ```
 
-10 lakes (out of 26) have shown an increase (later) ice on dates
+2 lakes (out of 7) have shown an increase (later) ice on dates
 
 
 #### Ice off
 
 
 ```{r, message=FALSE}
-# ice on ~ time
+# ice off ~ time
 fig_dat %>%
   group_by(lake) %>%
   # center the year based on the range of data for each lake
@@ -304,14 +330,14 @@ fig_dat %>%
   select(lake, estimate, p.value, beta1_positive)
 ```
 
-11 lakes (out of 26) show a decrease in ice off dates (earlier). 
+6 lakes (out of 7) show a decrease in ice off dates (earlier). 
 
 
 #### Ice duration
 
 
 ```{r, message=FALSE}
-# ice on ~ time
+# ice duration ~ time
 fig_dat %>%
   group_by(lake) %>%
   # center the year based on the range of data for each lake
@@ -319,7 +345,7 @@ fig_dat %>%
   # FWIW I tried both and same number of significant lakes
   mutate(start_y_c = start_year - mean(start_year)) %>%
   nest() %>%
-  mutate(model = map(data, ~lm(orig_duration~start_y_c, data = .)%>% tidy())) %>%
+  mutate(model = map(data, ~lm(ice_days~start_y_c, data = .)%>% tidy())) %>%
   unnest(model) %>%
   filter(term == "start_y_c",
          p.value < 0.05) %>%
@@ -328,4 +354,139 @@ fig_dat %>%
   select(lake, estimate, p.value, beta1_positive)
 ```
 
-13 lakes (out of 26) show a decrease in duration of ice. 
+5 lakes (out of 7) show a decrease in duration of ice. 
+
+
+
+## Figures with all lakes
+
+```{r}
+ysl_ice <- read.csv(here::here("scripts/YSLoff.csv")) %>%
+  select(Year, IceOnDate, IceOffDate,) %>%
+  mutate(lake = "yellowstone")
+
+```
+
+
+Modify data with `hydro.day()` function  
+
+* first need to combine ice on / off day with year  
+
+* format as date  
+
+* calculate "hydro day"  
+
+* calculate ice duration days  
+
+* rename and select columns to match with fig_data  
+
+```{r, warning=FALSE, message=FALSE}
+ysl_ice <- ysl_ice %>%
+  unite(IceOnDate, c(IceOnDate, Year), sep = "-", remove = FALSE) %>%
+  unite(IceOffDate, c(IceOffDate, Year), sep = "-", remove = FALSE) %>%
+  mutate(on_date = dmy(IceOnDate),
+         off_date = dmy(IceOffDate)) %>%
+  mutate(j_on_wy = hydro.day(on_date),
+         j_off_wy = hydro.day(off_date),
+         ice_days = j_off_wy - j_on_wy) %>%
+  rename(start_year = Year) %>%
+  select(lake, start_year, j_on_wy, j_off_wy, ice_days)
+
+```
+
+## Double check  
+**Note**: Make sure this is right. Looking at the YSL data, there is just one "Year" column, but sometimes the ice forms at the end of the year (i.e., Dec) or the beginning of the year (i.e. Jan). Is combining the ice on/off date with that year correct? May be "ading" a year's worth of ice duration. 
+
+### Back to combining data... 
+
+Bind rows for the ysl and non-ysl data
+
+```{r}
+full_fig <- bind_rows(fig_dat, ysl_ice)
+full_fig
+```
+
+Change data shape to plot a single, multi-panel figure
+
+```{r, message=FALSE, warning=FALSE, fig.width=10}
+full_fig %>% 
+  select(lake, start_year, ice_days, j_on_wy, j_off_wy) %>%
+  pivot_longer(ice_days:j_off_wy) %>%
+  ggplot(aes(x = start_year,
+             y = value)) +
+  geom_point() +
+  theme_bw() +
+  facet_grid(name ~ lake) +
+  geom_smooth()
+```
+**Note**: It's difficult to get the scaling right on this large, multi-panel plot. Depending on your browser/window it may look funny. The main take-home message is that Yellowstone is ~ flat across all three responses, while there is some variation across the other lakes.  
+
+## Linear models including Yellowstone
+
+For reference.  
+
+* might not need this type of analysis  
+
+* linear models are almost certainly not the best wat to do this  
+
+```{r, message=FALSE}
+# ice on ~ time
+full_fig %>%
+  group_by(lake) %>%
+  # center the year based on the range of data for each lake
+  # not sure if this is totally correct, might need to center it based on years in the "global" data set
+  # FWIW I tried both and same number of significant lakes
+  mutate(start_y_c = start_year - mean(start_year)) %>%
+  nest() %>%
+  mutate(model = map(data, ~lm(j_on_wy~start_y_c, data = .)%>% tidy())) %>%
+  unnest(model) %>%
+  filter(term == "start_y_c",
+         p.value < 0.05) %>%
+  mutate(beta1_positive = case_when(estimate > 0  ~ TRUE,
+                                    estimate < 0  ~FALSE)) %>%
+  select(lake, estimate, p.value, beta1_positive)
+```
+
+#### Ice off
+
+```{r, message=FALSE}
+# ice off ~ time
+full_fig %>%
+  group_by(lake) %>%
+  # center the year based on the range of data for each lake
+  # not sure if this is totally correct, might need to center it based on years in the "global" data set
+  # FWIW I tried both and same number of significant lakes
+  mutate(start_y_c = start_year - mean(start_year)) %>%
+  nest() %>%
+  mutate(model = map(data, ~lm(j_off_wy~start_y_c, data = .)%>% tidy())) %>%
+  unnest(model) %>%
+  filter(term == "start_y_c",
+         p.value < 0.05) %>%
+  mutate(beta1_positive = case_when(estimate > 0  ~ TRUE,
+                                    estimate < 0  ~FALSE)) %>%
+  select(lake, estimate, p.value, beta1_positive)
+```
+
+#### Ice duration
+
+```{r, message=FALSE}
+# ice duration ~ time
+full_fig %>%
+  group_by(lake) %>%
+  # center the year based on the range of data for each lake
+  # not sure if this is totally correct, might need to center it based on years in the "global" data set
+  # FWIW I tried both and same number of significant lakes
+  mutate(start_y_c = start_year - mean(start_year)) %>%
+  nest() %>%
+  mutate(model = map(data, ~lm(ice_days~start_y_c, data = .)%>% tidy())) %>%
+  unnest(model) %>%
+  filter(term == "start_y_c",
+         p.value < 0.05) %>%
+  mutate(beta1_positive = case_when(estimate > 0  ~ TRUE,
+                                    estimate < 0  ~FALSE)) %>%
+  select(lake, estimate, p.value, beta1_positive)
+```
+
+#### For what it's worth....
+
+Yellowstone lake was not included in any of the significant OLS regressions. On the surface, this seems to agree with main points of the MS, and at least *some* of the comparable lakes did have significant changes. 
