@@ -85,7 +85,7 @@ fig_dat <- non_ysl %>%
            lakecode == "JK03"| # Näsijärvi
            lakecode == "JK05"| # Päijänne
            lakecode == "JK40"| # Pielinen
-           lakecode == "GW484" # Skoruman
+           lakecode == "NG1" # Lake Baikal
          ) 
 ```
 
@@ -306,7 +306,7 @@ fig_dat %>%
   select(lake, estimate, p.value, beta1_positive)
 ```
 
-2 lakes (out of 7) have shown an increase (later) ice on dates
+3 lakes (out of 7) have shown an increase (later) ice on dates
 
 
 #### Ice off
@@ -354,7 +354,7 @@ fig_dat %>%
   select(lake, estimate, p.value, beta1_positive)
 ```
 
-5 lakes (out of 7) show a decrease in duration of ice. 
+6 lakes (out of 7) show a decrease in duration of ice. 
 
 
 
@@ -406,7 +406,8 @@ full_fig <- bind_rows(fig_dat, ysl_ice)
 full_fig
 ```
 
-Change data shape to plot a single, multi-panel figure
+Change data shape to plot a single, multi-panel figure.  
+* also added "free y" scale to try and better illustrate the trends. 
 
 ```{r, message=FALSE, warning=FALSE, fig.width=10}
 full_fig %>% 
@@ -416,7 +417,7 @@ full_fig %>%
              y = value)) +
   geom_point() +
   theme_bw() +
-  facet_grid(name ~ lake) +
+  facet_grid(name ~ lake, scales = "free_y") +
   geom_smooth()
 ```
 **Note**: It's difficult to get the scaling right on this large, multi-panel plot. Depending on your browser/window it may look funny. The main take-home message is that Yellowstone is ~ flat across all three responses, while there is some variation across the other lakes.  
