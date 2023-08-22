@@ -1,0 +1,198 @@
+---
+title: "non YSL mixed effects"
+author: "Justin Pomeranz"
+date: "8/22/2023"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+# libraries
+library(tidyverse)
+library(lme4)
+library(lmerTest)
+library(ggeffects)
+```
+
+# mixed effects for ice lake phenology
+# Justin Pomeranz <jpomeranz@coloradomesa.edu>
+# August 2023
+
+### libraries
+
+```{r}
+library(tidyverse)
+library(lme4)
+library(lmerTest)
+library(ggeffects)
+```
+
+```{r}
+# Custom function from Oleksy
+# custom function to caluclate julian-day of water year
+hydro.day = function(x, start.month = 10L) {
+  start.yr = year(x) - (month(x) < start.month)
+  start.date = make_date(start.yr, start.month, 1L)
+  as.integer(x - start.date + 1L)
+}
+```
+
+
+### data
+```{r message=FALSE, warning=FALSE}
+## Non-Yellowstone lakes
+non_ysl <- read_csv(here::here("scripts/other_phenology.txt"))
+
+non_ysl <- non_ysl %>%
+  # select necessary columns
+  select(lake, lakecode, start_year, iceOn, iceOff, orig_duration) %>% 
+  # filter out lakes: 
+  filter(lakecode == "JK25"| # Lake Haukivesi
+           lakecode == "JK02"| # Lake Kallavesi
+           lakecode == "GW369"| # Lake Kallsjön
+           lakecode == "JK03"| # Näsijärvi
+           lakecode == "JK05"| # Päijänne
+           lakecode == "JK40"| # Pielinen
+           lakecode == "NG1" # Lake Baikal
+  ) %>%
+  # caluclate on and off julian dates for water year
+  mutate(j_on_wy = hydro.day(iceOn),
+         j_off_wy = hydro.day(iceOff)) %>%
+  # filter out data only from 1927 to 2022
+  filter(start_year >= 1927, start_year <=2022) %>%
+  mutate(ice_days = j_off_wy - j_on_wy)
+
+# yellowstone data
+ysl_ice <- read.csv(here::here("scripts/YSLoff.csv")) %>%
+  select(Year, IceOnDate, IceOffDate,) %>%
+  mutate(lake = "yellowstone")
+
+# modify data
+ysl_ice <- ysl_ice %>%
+  unite(IceOnDate, c(IceOnDate, Year), sep = "-", remove = FALSE) %>%
+  unite(IceOffDate, c(IceOffDate, Year), sep = "-", remove = FALSE) %>%
+  mutate(on_date = dmy(IceOnDate),
+         off_date = dmy(IceOffDate)) %>%
+  mutate(j_on_wy = hydro.day(on_date),
+         j_off_wy = hydro.day(off_date),
+         ice_days = j_off_wy - j_on_wy) %>%
+  rename(start_year = Year) %>%
+  select(lake, start_year, j_on_wy, j_off_wy, ice_days) 
+
+# combine data sets
+full_data <- bind_rows(non_ysl, ysl_ice) %>%
+  mutate(start_y_c = start_year - mean(start_year, na.rm = TRUE))
+```
+
+
+## models
+
+* year has been centered and = fixed  
+
+* lake = random  
+
+Model Function. 
+
+```{r}
+mod_fun <- function(dat, response, title = NA){
+  resp_var <- enquo(response)
+  lme_mod <- lmer(as.formula(paste0(response, "~ start_y_c + (1|lake)")), data = dat)
+  out <- summary(lme_mod)
+  pred.mm <- ggpredict(lme_mod, terms = c("start_y_c"))
+  
+  plot <- ggplot(pred.mm) +
+     geom_line(aes(x = x, y = predicted)) +
+     geom_ribbon(aes(x = x, ymin = predicted - 1.96* std.error,
+                     ymax = predicted + 1.96 * std.error),
+                 fill = "lightgrey", alpha = 0.5) +
+     geom_point(data = dat,
+                aes_string(y = response,
+                    x = "start_y_c",
+                    color = "lake")) +
+     theme_bw() +
+     labs(title = title,
+       caption = paste0(response, ". Line is predicted fixed effect from mixed model. Ribbon is 95% CI. Color points refere to lake ID"))
+  print(plot)
+  return(out)
+}
+```
+
+* takes response variable as a quoted argument  
+
+  * i.e., "ice_days" is the duration  
+  
+* Can also add the title as a quoted argument  
+
+  * If no argument is supplied title is `NA`  
+  
+* returns the summary from the lmer model:  
+
+  * formula = `response_variable ~ start_y_c + (1|lake)`  
+  
+* Also plots the estimated fixed effects  
+
+### Duration
+
+```{r message=FALSE, warning=FALSE}
+mod_fun(full_data, "ice_days", "Ice Duration")
+```
+$\beta = -0.1976$; Decline of 0.1976 days per year (p < 0.001)
+Random effects explain `r round(347.7 / (347.7+394.2),2)` % of the variation in the data
+
+### Ice on
+
+```{r message=FALSE, warning=FALSE}
+mod_fun(full_data, "j_on_wy", "Ice On")
+```
+
+$\beta = 0.0968$; increase of 0.0968 days per year (p < 0.001)
+Random effects explain `r round(270.8 / (270.8+238.1), 2)` % of the variation in the data
+
+### Ice Off
+```{r message=FALSE, warning=FALSE}
+mod_fun(full_data, "j_off_wy", "Ice Off")
+```
+$\beta = -0.0940$; Decline of 0.0940 days per year (p < 0.001)
+Random effects explain `r round(61.49 / (61.49+65.77), 2)` % of the variation in the data
+
+
+## individual OLS
+
+```{r message=FALSE, warning=FALSE}
+ggplot(full_data, 
+       aes(x = start_y_c,
+                   y = ice_days,
+                   color = lake)) +
+     geom_point() +
+  stat_smooth(method = "lm", se = FALSE) +
+     theme_bw() +
+  labs(title = "Duration")
+```
+
+#### Notice that Yellowstone is ~flat
+
+```{r message=FALSE, warning=FALSE}
+ggplot(full_data, 
+       aes(x = start_y_c,
+                   y = j_on_wy,
+                   color = lake)) +
+     geom_point() +
+  stat_smooth(method = "lm", se = FALSE) +
+     theme_bw() +
+  labs(title = "ON")
+```
+
+#### Notice that Yellowstone is ~flat, also a few others maybe?
+
+```{r message=FALSE, warning=FALSE}
+ggplot(full_data, 
+       aes(x = start_y_c,
+                   y = j_off_wy,
+                   color = lake)) +
+     geom_point() +
+  stat_smooth(method = "lm", se = FALSE) +
+     theme_bw() +
+  labs(title = "OFF")
+```
+
+#### Notice that Yellowstone + Baikal is ~flat
