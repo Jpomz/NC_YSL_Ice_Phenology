@@ -196,3 +196,195 @@ ggplot(full_data,
 ```
 
 #### Notice that Yellowstone + Baikal is ~flat
+
+
+
+# GAMS
+
+```{r}
+library(mgcv)
+library(gratia)
+mod0_iceOn <- gam(j_on_wy ~ s(start_year),
+                        family=Gamma(link="log"),
+                        data = full_data %>% 
+                    filter(lake == "baikal"),
+                        correlation = corCAR1(form = ~ start_year),
+                        method = "REML")
+summary(mod0_iceOn)
+draw(mod0_iceOn)
+appraise(mod0_iceOn)
+```
+
+
+
+```{r}
+mod_fun2 <- function(data, gam_formula, lake_name){
+  mod <- gam(gam_formula,
+             family=Gamma(link="log"),
+             data = data %>%
+               filter(lake == lake_name),
+             correlation = corCAR1(
+               form = ~ start_year),
+             method = "REML")
+  mod_summary <- summary(mod)
+  draw_plot <- draw(mod)
+  app_plot <- appraise(mod)
+  return(list(lake_name = lake_name,
+              mod = mod,
+              summary = mod_summary,
+              draw_plot = draw_plot,
+              appraise = app_plot))}
+```
+
+# test function
+
+```{r}
+mod_fun2(full_data, j_on_wy~s(start_year), "baikal")
+mod_fun2(full_data, j_off_wy~s(start_year), "baikal")
+mod_fun2(full_data, ice_days~s(start_year), "baikal")
+mod_fun2(full_data, j_on_wy~s(start_year), "yellowstone")
+```
+
+```{r}
+foo2 <- function(mydata, gam_formula, group_var) {
+  group_var = enquo(group_var)
+
+  mydata <- mydata %>% 
+    group_by(!!group_var) %>% 
+    nest() 
+
+  mydata %>% 
+    mutate(
+      model = map(data,
+                  ~(gam(
+                    gam_formula,
+                    family=Gamma(link="log"),
+                    data = .,
+                    correlation = corCAR1(
+                      form = ~ start_year),
+                    method = "REML")))) 
+}
+foo2(full_data, j_on_wy~s(start_year), lake) %>%
+  mutate(tidied = map(model, tidy)) %>%
+  unnest(tidied)
+```
+
+# testing foo 2
+
+```{r}
+library(broom)
+foo2(full_data, j_on_wy~s(start_year), lake)
+```
+
+
+# list
+
+For loop producing a list of the summary outputs for each lake. 
+
+Run the loop for each response variable
+
+### ice on
+```{r}
+lake_names <- full_data %>% pull(lake) %>% unique()
+
+ice_on_list <- list()
+for (lake in 1:length(lake_names)){
+  lake_name = lake_names[lake]
+  response_mod <- mod_fun2(full_data, j_on_wy~s(start_year), lake_name)
+  ice_on_list[[lake]] <- response_mod
+}
+names(ice_on_list) <- lake_names
+```
+
+### ice off
+```{r}
+ice_off_list <- list()
+for (lake in 1:length(lake_names)){
+  lake_name = lake_names[lake]
+  response_mod <- mod_fun2(full_data, j_off_wy~s(start_year), lake_name)
+  ice_off_list[[lake]] <- response_mod
+}
+names(ice_off_list) <- lake_names
+```
+
+
+
+### duration
+```{r}
+ice_days_list <- list()
+for (lake in 1:length(lake_names)){
+  lake_name = lake_names[lake]
+  response_mod <- mod_fun2(full_data, ice_days~s(start_year), lake_name)
+  ice_days_list[[lake]] <- response_mod
+}
+names(ice_days_list) <- lake_names
+```
+
+# print out results of baikal as example
+
+```{r}
+list(ice_days_list$baikal,
+     ice_off_list$baikal,
+     ice_on_list$baikal)
+```
+
+## Yellowstone
+
+```{r}
+list(ice_days_list$yellowstone,
+     ice_off_list$yellowstone,
+     ice_on_list$yellowstone)
+```
+
+```{r}
+ice_on_list
+```
+
+```{r}
+ice_off_list
+```
+
+
+```{r}
+ice_days_list
+```
+
+```{r}
+ggplot(full_data,
+       aes( x = start_year,
+            y = ice_days,
+            color = lake)) +
+         geom_point() +
+         stat_smooth(method = "gam") +
+  facet_wrap(~lake)
+
+ggplot(full_data,
+       aes( x = start_year,
+            y = j_on_wy,
+            color = lake)) +
+         geom_point() +
+         stat_smooth(method = "gam") +
+  facet_wrap(~lake)
+
+ggplot(full_data,
+       aes( x = start_year,
+            y = j_off_wy,
+            color = lake)) +
+         geom_point() +
+         stat_smooth(method = "gam") +
+  facet_wrap(~lake)
+```
+
+
+
+
+## auto corr
+
+```{r}
+ACF <- acf(resid(ice_on_list$baikal$mod, type = "response"), plot = FALSE)
+ACF <- setNames(data.frame(unclass(ACF)[c("acf", "lag")]), c("ACF","Lag"))
+ggplot(ACF, aes(x = Lag, y = ACF)) +
+  geom_hline(aes(yintercept = 0)) +
+  geom_segment(mapping = aes(xend = Lag, yend = 0))
+```
+
