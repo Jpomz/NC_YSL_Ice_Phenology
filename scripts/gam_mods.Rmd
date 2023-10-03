@@ -1,0 +1,361 @@
+---
+title: "GAM models"
+author: "Justin Pomeranz"
+date: "8/22/2023"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+# libraries
+library(tidyverse)
+library(lme4)
+library(lmerTest)
+library(ggeffects)
+library(broom)
+library(mgcv)
+library(gratia)
+library(broom)
+```
+
+# Generalized Additive Models for ice lake phenology
+# Justin Pomeranz <jpomeranz@coloradomesa.edu>
+# September 2023
+
+### libraries
+
+```{r}
+library(tidyverse)
+library(lme4)
+library(lmerTest)
+library(ggeffects)
+library(broom)
+library(mgcv)
+library(gratia)
+library(broom)
+```
+
+Custom function previously written by Bella Oleksy to calculate the number of days based on water year (beginning on October 1)
+
+```{r}
+# Custom function from Oleksy
+# custom function to calculate julian-day of water year
+hydro.day = function(x, start.month = 10L) {
+  start.yr = year(x) - (month(x) < start.month)
+  start.date = make_date(start.yr, start.month, 1L)
+  as.integer(x - start.date + 1L)
+}
+```
+
+
+### data
+
+#### Note on the data 
+
+I copied the raw data from: <https://github.com/afilazzola/IcePhenologyDatabase/blob/main/data/PhenologyData.csv#L6>
+
+When I tried to download the original csv file, excel was doing weird things with the date columns. This occurred even when I copied/pasted directly into excel, and changed the advanced settings for "text to columns" option. 
+
+I found a workaround:  
+1. I copied the raw data from the github link above  
+2. Pasted the raw values into notepad and saved as a `.txt` file  
+3. read in the `.txt` file  
+4. All dates correctly imported as `<date>` format.  
+
+#### Wrangle data
+
+* Select the columns  
+* filter out appropriate lakes  
+* calculate "hydro day" (Julian day of water year, starting on Oct 1)  
+* filter years between 1927 to 2022  
+* Calculate ice duration days  
+
+Read in the lake phenology data from "other" lakes. 
+```{r message=FALSE, warning=FALSE}
+## Non-Yellowstone lakes
+non_ysl <- read_csv(here::here("scripts/other_phenology.txt"))
+
+non_ysl <- non_ysl %>%
+  # select necessary columns
+  select(lake, lakecode, start_year, iceOn, iceOff, orig_duration) %>% 
+  # filter out lakes: 
+  filter(lakecode == "JK25"| # Lake Haukivesi
+           lakecode == "JK02"| # Lake Kallavesi
+           lakecode == "GW369"| # Lake Kallsjön
+           lakecode == "JK03"| # Näsijärvi
+           lakecode == "JK05"| # Päijänne
+           lakecode == "JK40"| # Pielinen
+           lakecode == "NG1" # Lake Baikal
+  ) %>%
+  # caluclate on and off julian dates for water year
+  mutate(j_on_wy = hydro.day(iceOn),
+         j_off_wy = hydro.day(iceOff)) %>%
+  # filter out data only from 1927 to 2022
+  filter(start_year >= 1927, start_year <=2022) %>%
+  mutate(ice_days = j_off_wy - j_on_wy)
+
+```
+
+#### Modify yellowstone lake data
+```{r}
+# yellowstone data
+ysl_ice <- read.csv(here::here("scripts/YSLoff.csv")) %>%
+  select(Year, IceOnDate, IceOffDate,) %>%
+  mutate(lake = "yellowstone")
+
+# modify data
+ysl_ice <- ysl_ice %>%
+  unite(IceOnDate, c(IceOnDate, Year), sep = "-", remove = FALSE) %>%
+  unite(IceOffDate, c(IceOffDate, Year), sep = "-", remove = FALSE) %>%
+  mutate(on_date = dmy(IceOnDate),
+         off_date = dmy(IceOffDate)) %>%
+  mutate(j_on_wy = hydro.day(on_date),
+         j_off_wy = hydro.day(off_date),
+         ice_days = j_off_wy - j_on_wy) %>%
+  rename(start_year = Year) %>%
+  select(lake, start_year, j_on_wy, j_off_wy, ice_days) 
+```
+
+#### combine the two data sets into `full_data`
+```{r}
+# combine data sets
+full_data <- bind_rows(non_ysl, ysl_ice) %>%
+  mutate(start_y_c = start_year - mean(start_year, na.rm = TRUE))
+```
+
+
+# GAMs
+
+#### Function to fit GAMs
+
+* Fit a GAM with specified `gam_formula`  
+
+* Make the following objects  
+
+  * model summaries  
+  
+  * draw_plot  
+  
+  * appraise model  
+  
+* Return a list with the following:  
+
+  * `lake_name`  
+  
+  * `mod` = model fit  
+  
+  * `draw_plot` = results of the `draw()` function  
+  
+  * `appraise` = results of the `apraise()` function  
+  
+
+```{r}
+gam_mod_fun <- function(data, gam_formula, lake_name){
+  mod <- gam(gam_formula,
+             family=Gamma(link="log"),
+             data = data %>%
+               filter(lake == lake_name),
+             correlation = corCAR1(
+               form = ~ start_year),
+             method = "REML")
+  mod_summary <- summary(mod)
+  draw_plot <- draw(mod)
+  app_plot <- appraise(mod)
+  return(list(lake_name = lake_name,
+              mod = mod,
+              summary = mod_summary,
+              draw_plot = draw_plot,
+              appraise = app_plot))}
+```
+
+# Summary function  
+
+This function summarizes the GAM model fits and displays output in a "tidy" format
+
+```{r}
+gam_summary <- function(mydata, gam_formula, group_var) {
+  group_var = enquo(group_var)
+
+  mydata <- mydata %>% 
+    group_by(!!group_var) %>% 
+    nest() 
+
+  mydata %>% 
+    mutate(
+      model = map(data,
+                  ~(gam(
+                    gam_formula,
+                    family=Gamma(link="log"),
+                    data = .,
+                    correlation = corCAR1(
+                      form = ~ start_year),
+                    method = "REML")))) 
+}
+
+```
+
+
+# list of models
+
+`for`-loop producing a list of the summary outputs for each lake. 
+
+Run the loop for each response variable
+
+### ice on
+```{r}
+lake_names <- full_data %>%
+  pull(lake) %>%
+  unique()
+
+ice_on_list <- list()
+for (lake in 1:length(lake_names)){
+  lake_name = lake_names[lake]
+  response_mod <- gam_mod_fun(full_data, j_on_wy~s(start_year), lake_name)
+  ice_on_list[[lake]] <- response_mod
+}
+names(ice_on_list) <- lake_names
+```
+
+### ice off
+```{r}
+ice_off_list <- list()
+for (lake in 1:length(lake_names)){
+  lake_name = lake_names[lake]
+  response_mod <- gam_mod_fun(full_data, j_off_wy~s(start_year), lake_name)
+  ice_off_list[[lake]] <- response_mod
+}
+names(ice_off_list) <- lake_names
+```
+
+
+### duration
+```{r}
+ice_days_list <- list()
+for (lake in 1:length(lake_names)){
+  lake_name = lake_names[lake]
+  response_mod <- gam_mod_fun(full_data, ice_days~s(start_year), lake_name)
+  ice_days_list[[lake]] <- response_mod
+}
+names(ice_days_list) <- lake_names
+```
+
+# print out results of baikal as example
+
+```{r}
+list(ice_days_list$baikal,
+     ice_off_list$baikal,
+     ice_on_list$baikal)
+```
+
+## Yellowstone
+
+```{r}
+list(ice_days_list$yellowstone,
+     ice_off_list$yellowstone,
+     ice_on_list$yellowstone)
+```
+## plot results
+
+**NOTE** these plots use the default `"gam"` option in `stat_smooth()`. They may differ slightly from the model fits used above. 
+
+# Ice duration figure
+
+```{r}
+ggplot(full_data,
+       aes( x = start_year,
+            y = ice_days,
+            color = lake)) +
+         geom_point() +
+         stat_smooth(method = "gam") +
+  facet_wrap(~lake)
+```
+
+# Ice-on figure
+
+```{r}
+ggplot(full_data,
+       aes( x = start_year,
+            y = j_on_wy,
+            color = lake)) +
+         geom_point() +
+         stat_smooth(method = "gam") +
+  facet_wrap(~lake)
+```
+
+# Ice-off figure
+
+```{r}
+ggplot(full_data,
+       aes( x = start_year,
+            y = j_off_wy,
+            color = lake)) +
+         geom_point() +
+         stat_smooth(method = "gam") +
+  facet_wrap(~lake)
+```
+
+## summary output of gams
+
+**NOTE** edf in the summary output indicates the "wiggly-ness" of the model.  
+* edf 1 == Linear
+* edf 2 == quadratic  
+* edf 3 == cubic polynomial... 
+* etc.  
+
+
+Most of the following models fall between edf 1 to edf 3.  
+
+Lake Baikal has edf 6 for ice-off. 
+
+
+The following summary outputs are arranged by p-value. Lakes at the top are "more significant", and lakes lower down are less or non-significant. 
+
+Yellowstone is non-significant for all three responses. Most lakes have a significant response for most response variables.   
+
+### Ice-on
+```{r}
+gam_summary(full_data, j_on_wy~s(start_year), lake) %>%
+  mutate(tidied = map(model, tidy)) %>%
+  select(tidied) %>%
+  unnest(tidied) %>%
+  arrange(lake_name, p.value)
+```
+
+Kallsjon and Yellowstone are non-significant 
+
+
+
+### Ice-off
+```{r}
+gam_summary(full_data, j_off_wy~s(start_year), lake) %>%
+  mutate(tidied = map(model, tidy)) %>%
+  select(tidied) %>%
+  unnest(tidied) %>%
+  arrange(lake_name, p.value)
+```
+
+Only Yellowstone is non-significant 
+
+### duration
+```{r}
+gam_summary(full_data, ice_days~s(start_year), lake) %>%
+  mutate(tidied = map(model, tidy)) %>%
+  select(tidied) %>%
+  unnest(tidied) %>%
+  arrange(lake_name, p.value)
+```
+
+Kallsjon and Yellowstone are non-significant 
+
+
+## auto corr
+
+### Still need to scale this up to the full data
+
+```{r}
+ACF <- acf(resid(ice_on_list$baikal$mod, type = "response"), plot = FALSE)
+ACF <- setNames(data.frame(unclass(ACF)[c("acf", "lag")]), c("ACF","Lag"))
+ggplot(ACF, aes(x = Lag, y = ACF)) +
+  geom_hline(aes(yintercept = 0)) +
+  geom_segment(mapping = aes(xend = Lag, yend = 0))
+```

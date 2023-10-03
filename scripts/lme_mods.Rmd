@@ -12,6 +12,7 @@ library(tidyverse)
 library(lme4)
 library(lmerTest)
 library(ggeffects)
+library(broom)
 ```
 
 # mixed effects for ice lake phenology
@@ -388,3 +389,27 @@ ggplot(ACF, aes(x = Lag, y = ACF)) +
   geom_segment(mapping = aes(xend = Lag, yend = 0))
 ```
 
+## summary output of gams
+
+### Ice-on
+```{r}
+foo2(full_data, j_on_wy~s(start_year), lake) %>%
+  mutate(tidied = map(model, tidy)) %>%
+  select(tidied) %>%
+  unnest(tidied)
+```
+
+### Ice-of
+```{r}
+foo2(full_data, j_off_wy~s(start_year), lake) %>%
+  mutate(tidied = map(model, tidy)) %>%
+  select(tidied) %>%
+  unnest(tidied)
+```
+### duration
+```{r}
+foo2(full_data, ice_days~s(start_year), lake) %>%
+  mutate(tidied = map(model, tidy)) %>%
+  select(tidied) %>%
+  unnest(tidied)
+```
