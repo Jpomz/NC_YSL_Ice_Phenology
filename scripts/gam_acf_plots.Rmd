@@ -1,0 +1,111 @@
+---
+title: "GAM ACF plots"
+author: "Justin Pomeranz"
+date: "October 2023"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+# libraries
+library(tidyverse)
+```
+
+# Auto-correlation for Generalized Additive Models for ice lake phenology
+# Justin Pomeranz <jpomeranz@coloradomesa.edu>
+# October 2023  
+
+This html file contains ACF plots for 24 models (8 lakes * 3 response variables). 
+
+I briefly looked into how to interpret these plots, and it *seems* ok, but I was hoping you could take a look at them as well since I think you know more about this than me. 
+
+### libraries
+
+```{r, eval=FALSE}
+library(tidyverse)
+```
+
+
+### data
+
+#### Note on the data 
+
+This data is modified and wrangled in `gam_mods.rmd`. 
+
+```{r}
+full_data <- readRDS(file = here::here("scripts/all_lake_data.rds"))
+```
+
+### List of models 
+
+These models were also created in `gam_mods.rmd`. 
+
+```{r}
+ice_response_list <- readRDS(
+  file = here::here("scripts/ice_response_list.RDS"))
+```
+
+
+## Custom functions  
+
+by Pomeranz  
+
+### function to plot ACF
+```{r}
+plot_acf <- function(model, title, lake_name = NULL){
+ACF <- acf(resid(model,
+                   type = "response"),
+             plot = FALSE)
+ACF <- setNames(
+  data.frame(
+    unclass(ACF)[c("acf", "lag")]),
+  c("ACF","Lag"))
+
+plot <- ggplot(ACF, aes(x = Lag, y = ACF)) +
+  geom_hline(aes(yintercept = 0)) +
+  geom_segment(mapping = aes(xend = Lag, yend = 0)) +
+  labs(title = title,
+       subtitle = lake_name)
+
+print(plot)
+}
+```
+
+# function to scale up plotting  
+
+```{r}
+plot_acf_list <- function(ice_list, response_name){
+  for(lake in 1:length(ice_list)){
+  lake_name = names(ice_days_list)[lake]
+  plot_acf(ice_list[[lake]]$mod, response_name, lake_name = lake_name)
+}
+}
+```
+
+# ACF plots
+
+# ice duration  
+
+
+```{r}
+ice_days_list <- ice_response_list$duration
+plot_acf_list(ice_days_list, "Duration")
+```
+
+
+
+# ice OFF  
+
+```{r}
+ice_off_list <- ice_response_list$off_date
+plot_acf_list(ice_off_list, "Ice-off-date")
+```
+
+
+# ice ON  
+
+```{r}
+ice_on_list <- ice_response_list$on_date
+plot_acf_list(ice_on_list, "ice-on-date")
+```
+

@@ -121,6 +121,8 @@ ysl_ice <- ysl_ice %>%
 # combine data sets
 full_data <- bind_rows(non_ysl, ysl_ice) %>%
   mutate(start_y_c = start_year - mean(start_year, na.rm = TRUE))
+saveRDS(full_data,
+        file = here::here("scripts/all_lake_data.rds"))
 ```
 
 
@@ -238,6 +240,19 @@ for (lake in 1:length(lake_names)){
 }
 names(ice_days_list) <- lake_names
 ```
+
+## Save list of lists
+ice_response_list = list(ice_days_list
+ice_off_list
+ice_on_list)
+
+```{r}
+ice_response_list = list(duration = ice_days_list,
+                         off_date = ice_off_list,
+                         on_date = ice_on_list)
+saveRDS(ice_response_list, file = here::here("scripts/ice_response_list.RDS"))
+```
+
 
 # print out results of baikal as example
 
@@ -359,3 +374,59 @@ ggplot(ACF, aes(x = Lag, y = ACF)) +
   geom_hline(aes(yintercept = 0)) +
   geom_segment(mapping = aes(xend = Lag, yend = 0))
 ```
+
+```{r}
+plot_acf <- function(model, title, lake_name = NULL){
+ACF <- acf(resid(model,
+                   type = "response"),
+             plot = FALSE)
+ACF <- setNames(
+  data.frame(
+    unclass(ACF)[c("acf", "lag")]),
+  c("ACF","Lag"))
+
+plot <- ggplot(ACF, aes(x = Lag, y = ACF)) +
+  geom_hline(aes(yintercept = 0)) +
+  geom_segment(mapping = aes(xend = Lag, yend = 0)) +
+  labs(title = title,
+       subtitle = lake_name)
+
+print(plot)
+}
+```
+
+```{r}
+# plot_acf(ice_days_list[[1]]$mod,
+#          "Ice-Duration",
+#          "lake_name")
+
+# for(lake in 1:length(ice_days_list)){
+#   lake_name = names(ice_days_list)[lake]
+#   plot_acf(ice_on_list[[lake]]$mod, "ice-duration", lake_name = lake_name)
+# }
+
+plot_acf_list <- function(ice_list, response_name){
+  for(lake in 1:length(ice_list)){
+  lake_name = names(ice_days_list)[lake]
+  plot_acf(ice_on_list[[lake]]$mod, response_name, lake_name = lake_name)
+}
+}
+```
+
+## ACF plots
+
+### ice duration
+
+```{r}
+plot_acf_list(ice_days_list, "Duration")
+```
+
+### ice OFF
+```{r}
+plot_acf_list(ice_off_list, "Ice-off-date")
+```
+### ice ON
+```{r}
+plot_acf_list(ice_on_list, "ice-on-date")
+```
+
