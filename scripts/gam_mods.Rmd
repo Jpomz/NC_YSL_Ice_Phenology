@@ -362,71 +362,23 @@ gam_summary(full_data, ice_days~s(start_year), lake) %>%
 
 Kallsjon and Yellowstone are non-significant 
 
-
-## auto corr
-
-### Still need to scale this up to the full data
+## Full figure  
 
 ```{r}
-ACF <- acf(resid(ice_on_list$baikal$mod, type = "response"), plot = FALSE)
-ACF <- setNames(data.frame(unclass(ACF)[c("acf", "lag")]), c("ACF","Lag"))
-ggplot(ACF, aes(x = Lag, y = ACF)) +
-  geom_hline(aes(yintercept = 0)) +
-  geom_segment(mapping = aes(xend = Lag, yend = 0))
-```
+full_data %>% 
+  select(lake, start_year, ice_days, j_on_wy, j_off_wy) %>%
+  pivot_longer(ice_days:j_off_wy) %>%
+  ggplot(aes(x = start_year,
+             y = value)) +
+  geom_point() +
+  theme_bw() +
+  facet_grid(name ~ lake, scales = "free_y") +
+  geom_smooth(method = "gam") + 
+  labs(y = "Day of water year") +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
 
-```{r}
-plot_acf <- function(model, title, lake_name = NULL){
-ACF <- acf(resid(model,
-                   type = "response"),
-             plot = FALSE)
-ACF <- setNames(
-  data.frame(
-    unclass(ACF)[c("acf", "lag")]),
-  c("ACF","Lag"))
-
-plot <- ggplot(ACF, aes(x = Lag, y = ACF)) +
-  geom_hline(aes(yintercept = 0)) +
-  geom_segment(mapping = aes(xend = Lag, yend = 0)) +
-  labs(title = title,
-       subtitle = lake_name)
-
-print(plot)
-}
-```
-
-```{r}
-# plot_acf(ice_days_list[[1]]$mod,
-#          "Ice-Duration",
-#          "lake_name")
-
-# for(lake in 1:length(ice_days_list)){
-#   lake_name = names(ice_days_list)[lake]
-#   plot_acf(ice_on_list[[lake]]$mod, "ice-duration", lake_name = lake_name)
-# }
-
-plot_acf_list <- function(ice_list, response_name){
-  for(lake in 1:length(ice_list)){
-  lake_name = names(ice_days_list)[lake]
-  plot_acf(ice_on_list[[lake]]$mod, response_name, lake_name = lake_name)
-}
-}
-```
-
-## ACF plots
-
-### ice duration
-
-```{r}
-plot_acf_list(ice_days_list, "Duration")
-```
-
-### ice OFF
-```{r}
-plot_acf_list(ice_off_list, "Ice-off-date")
-```
-### ice ON
-```{r}
-plot_acf_list(ice_on_list, "ice-on-date")
+# code to save image
+# commenting out - trouble knitting with it in
+# ggsave(here::here("scripts/full_fig_gams.png"),units = "in", height = 8, width = 8)
 ```
 
