@@ -1,0 +1,109 @@
+---
+title: "estonian-lakes"
+author: "Justin Pomeranz"
+date: "2023-10-22"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+est_dat <- read_csv(here::here("data/noges_noges_simple.csv"))
+
+```
+
+### Setup
+```{r, eval=FALSE}
+# estonian lakes from Noges and Noges 2014
+
+library(tidyverse)
+
+est_dat <- read_csv("data/noges_noges_simple.csv")
+
+```
+
+Custom function for hydro day
+```{r}
+# Custom function from Oleksy
+# custom function to calculate julian-day of water year
+hydro.day = function(x, start.month = 10L) {
+  start.yr = year(x) - (month(x) < start.month)
+  start.date = make_date(start.yr, start.month, 1L)
+  as.integer(x - start.date + 1L)
+}
+```
+
+Calc hydro days. Also compare their duration with the one we calculated
+```{r}
+est_dat <- est_dat %>%
+  mutate(j_on_wy = hydro.day(Start),
+         j_off_wy = hydro.day(End),
+         year = year(End),
+         duration_calc = j_off_wy - j_on_wy,
+         dur_equal = Duration_orig == duration_calc) 
+
+est_dat %>%
+  filter(dur_equal == FALSE) %>%
+  distinct(Lake) # just Mustvee calcs are different
+```
+
+One of the lakes has all the same durations, one does not. I use their original calculation in plot below
+
+```{r}
+est_dat %>%
+  filter(dur_equal == FALSE) %>% 
+  mutate(diff = duration_calc - Duration_orig) %>%
+  summarize(mean(diff), sd(diff))
+```
+our calc versus theres is off by an average of 28 $\pm$ 19 days (mean $\pm$ 1 standard deviation)
+
+# plots  
+### Ice on by year  
+
+```{r}
+ggplot(est_dat,
+       aes(x = year,
+           y = j_on_wy,
+           color = Lake)) +
+  geom_point() +
+  stat_smooth(method = "gam")
+```
+
+### Ice off by year  
+
+
+```{r}
+est_dat %>%
+  ggplot(aes(x = year,
+             y = j_off_wy,
+             color = Lake)) +
+  geom_point() +
+  stat_smooth(method = "gam")
+```
+
+
+### Duration, original calc  
+
+```{r}
+est_dat %>%
+  ggplot(aes(x = year,
+             y = Duration_orig,
+             color = Lake)) +
+  geom_point() +
+  stat_smooth(method = "gam")
+
+```
+
+
+
+### Duration, new calc  
+
+```{r}
+est_dat %>%
+  ggplot(aes(x = year,
+             y = duration_calc,
+             color = Lake)) +
+  geom_point() +
+  stat_smooth(method = "gam")
+
+```
