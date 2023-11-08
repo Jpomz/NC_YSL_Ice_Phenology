@@ -382,3 +382,27 @@ full_data %>%
 # ggsave(here::here("scripts/full_fig_gams.png"),units = "in", height = 8, width = 8)
 ```
 
+### Code to export high quality pdf  
+
+The following code is not run when the RMarkdown file is knit. To export the figure, you will need to copy/paste the below code into the console.  
+
+```{r, eval=FALSE}
+hi_res <- full_data %>% 
+  select(lake, start_year, ice_days, j_on_wy, j_off_wy) %>%
+  pivot_longer(ice_days:j_off_wy) %>%
+  mutate(name = factor(name, levels = c("j_on_wy", "j_off_wy", "ice_days"))) %>%
+  ggplot(aes(x = start_year,
+             y = value)) +
+  geom_point() +
+  theme_bw() +
+  facet_grid(name ~ lake, scales = "free_y") +
+  geom_smooth(method = "gam") + 
+  labs(y = "Day of water year") +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+
+ggsave(filename = here::here("scripts/full_fig_hi-res.pdf"),
+       plot = hi_res,
+       dpi = 300)
+```
+
+
