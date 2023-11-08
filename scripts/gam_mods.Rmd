@@ -329,11 +329,13 @@ Yellowstone is non-significant for all three responses. Most lakes have a signif
 
 ### Ice-on
 ```{r}
-gam_summary(full_data, j_on_wy~s(start_year), lake) %>%
+off_stats <- gam_summary(full_data, j_on_wy~s(start_year), lake) %>%
   mutate(tidied = map(model, tidy)) %>%
   select(tidied) %>%
   unnest(tidied) %>%
+  mutate(phenology = "ice_on") %>%
   arrange(lake_name, p.value)
+off_stats
 ```
 
 Kallsjon and Yellowstone are non-significant 
@@ -342,23 +344,37 @@ Kallsjon and Yellowstone are non-significant
 
 ### Ice-off
 ```{r}
-gam_summary(full_data, j_off_wy~s(start_year), lake) %>%
+on_stats <- gam_summary(full_data, j_off_wy~s(start_year), lake) %>%
   mutate(tidied = map(model, tidy)) %>%
   select(tidied) %>%
   unnest(tidied) %>%
-  arrange(lake_name, p.value)
+  arrange(lake_name, p.value) %>%
+  mutate(phenology = "ice_off") 
+on_stats
 ```
 
 Only Yellowstone is non-significant 
 
 ### duration
 ```{r}
-gam_summary(full_data, ice_days~s(start_year), lake) %>%
+duration_stats <- gam_summary(full_data, ice_days~s(start_year), lake) %>%
   mutate(tidied = map(model, tidy)) %>%
   select(tidied) %>%
   unnest(tidied) %>%
-  arrange(lake_name, p.value)
+  arrange(lake_name, p.value) %>%
+  mutate(phenology = "ice_duration") 
+duration_stats
 ```
+
+### Code to export  
+
+The following is not run when the document is stitched. To export the results, you will need to copy/paste the code into the console
+
+```{r, eval=FALSE}
+bind_rows(on_stats, off_stats, duration_stats) %>%
+  write_csv(here::here("scripts/gam_stat_table.csv"))
+```
+
 
 Kallsjon and Yellowstone are non-significant 
 
