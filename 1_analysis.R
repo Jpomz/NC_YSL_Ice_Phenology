@@ -575,6 +575,7 @@ ggsave(plot=last_plot(), "Figures/GAMS_WinterSnow.png",
 
 # ~ Winter snow depth--------------------------------------------------------------
 
+# No wintersnowdepth variable? ####
 mod0_WinterSnowDepth <- gam(WinterSnowDepth ~ s(Year),
                             data = YSLoff,
                             # correlation = corARMA(form = ~ 1 | Year, p = 1), 
