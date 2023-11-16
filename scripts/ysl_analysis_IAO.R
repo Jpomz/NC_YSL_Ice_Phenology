@@ -3,7 +3,10 @@ library(ggpubr)
 library(mgcv)
 library(gratia)
 
-source("scripts/functions_IAO.R")
+# original 
+# source("scripts/functions_IAO.R")
+# updated for jp laptop
+source("0_functions.R")
 
 
   
@@ -1025,3 +1028,4 @@ summary(mod5_iceDuration)
 appraise(mod5_iceDuration)
 draw(mod5_iceDuration)
 gam.check(mod5_iceDuration)
+
