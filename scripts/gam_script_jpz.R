@@ -182,6 +182,13 @@ for (lake in 1:length(lake_names)){
 }
 names(ice_days_list) <- lake_names
 
+# save list of response lists ####
+ice_response_list = list(duration = ice_days_list,
+                         off_date = ice_off_list,
+                         on_date = ice_on_list)
+# save rds
+saveRDS(ice_response_list, file = here::here("scripts/ice_response_list.RDS"))
+
 # gam summaries ####
 # ice-on summary ####
 on_stats <- gam_summary(full_data, j_on_wy~s(start_year), lake) %>%

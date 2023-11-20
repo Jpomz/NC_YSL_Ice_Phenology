@@ -362,13 +362,13 @@ Yellowstone is non-significant for all three responses. Most lakes have a signif
 
 ### Ice-on
 ```{r}
-off_stats <- gam_summary(full_data, j_on_wy~s(start_year), lake) %>%
+on_stats <- gam_summary(full_data, j_on_wy~s(start_year), lake) %>%
   mutate(tidied = map(model, tidy)) %>%
   select(tidied) %>%
   unnest(tidied) %>%
   mutate(phenology = "ice_on") %>%
   arrange(lake_name, p.value)
-off_stats
+on_stats
 ```
 
 Kallsjon and Yellowstone are non-significant 
@@ -377,13 +377,13 @@ Kallsjon and Yellowstone are non-significant
 
 ### Ice-off
 ```{r}
-on_stats <- gam_summary(full_data, j_off_wy~s(start_year), lake) %>%
+off_stats <- gam_summary(full_data, j_off_wy~s(start_year), lake) %>%
   mutate(tidied = map(model, tidy)) %>%
   select(tidied) %>%
   unnest(tidied) %>%
   arrange(lake_name, p.value) %>%
   mutate(phenology = "ice_off") 
-on_stats
+off_stats
 ```
 
 Only Yellowstone is non-significant 
